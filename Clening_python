@@ -1,0 +1,43 @@
+# -- Asegurar valores comparables --
+df_tratada["CATEGORIA"] = df_tratada["CATEGORIA"].astype(str).str.strip().str.upper()
+
+# -- Clasificación de tipo movimiento --
+df_tratada["TIPO MOVIMIENTO"] = df_tratada.apply(
+    lambda row: "EGRESO" if row["CATEGORIA"] in [
+        "ENTREGA EFECTIVO DIA A", "ADELANTOS O PRESTAMOS", "GASTOS Ò PAGOS PROVEEDORES",
+        "TRANSFERENCIAS", "VALOR PAGOS TRANSFERENCIAS", "COMISION"
+    ] else "INGRESO" if row["CATEGORIA"] in ["BASE DÍA", "INGRESO EFECTIVO", "SERVICIOS"]
+    else row.get("TIPO MOVIMIENTO", None),
+    axis=1
+)
+
+# -- Asignación condicional de EFECTIVO INGRESO y EGRESO --
+def asignar_efectivos(row):
+    categoria = row["CATEGORIA"]
+    valor = row["VALOR ($)"]
+    efectivo = row["EFECTIVO"]
+
+    if categoria in ["BASE DÍA", "INGRESO EFECTIVO"]:
+        return pd.Series([valor, 0])
+    elif categoria == "SERVICIOS" and isinstance(efectivo, (int, float)) and efectivo > 0:
+        return pd.Series([efectivo, 0])
+    elif categoria in ["ADELANTOS O PRESTAMOS", "ENTREGA EFECTIVO DIA A", "GASTOS Ò PAGOS PROVEEDORES"]:
+        return pd.Series([0, valor])
+    elif categoria == "ABONO/BANCO":
+        return pd.Series([0, 0])
+    else:
+        return pd.Series([row.get("EFECTIVO", 0), None])
+
+df_tratada[["EFECTIVO INGRESO", "EFECTIVO EGRESO"]] = df_tratada.apply(asignar_efectivos, axis=1)
+
+# -- EGRESO POR TRANSFERENCIA: Si / No según categoría --
+df_tratada["EGRESO POR TRANSFERENCIA"] = df_tratada["CATEGORIA"].eq("TRANSFERENCIAS").map({True: "Si", False: "No"})
+
+# -- Reordenar columnas --
+columnas_final = [
+    "FECHA", "# ORDEN", "CONCEPTO", "CATEGORIA", "TIPO MOVIMIENTO", "CLIENTE", "CELULAR",
+    "VEHICULO", "PLACA", "OPERARIO", "FORMA DE PAGO", "BANCOLOMBIA", "EFECTIVO", "DATAFONO",
+    "INGRESO POR TRANSFERENCIA", "VALOR ($)", "BANCO VALOR PAGOS TRANSFERENCIAS", "BANCO INGRESO EFECTIVO",
+    "EFECTIVO INGRESO", "EFECTIVO EGRESO", "EGRESO POR TRANSFERENCIA"
+]
+df_tratada = df_tratada[[col for col in columnas_final if col in df_tratada.columns]]
